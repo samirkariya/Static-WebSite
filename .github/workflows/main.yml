@@ -1,0 +1,68 @@
+name: CI Pipeline
+  
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  
+jobs:
+  CI:  
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Verify Node.js Version
+        run: node -v
+        
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Install JFrog CLI
+        run: curl -fL https://getcli.jfrog.io/v2 | sh && sudo mv jfrog /usr/local/bin/
+
+      - name: Configure JFrog CLI
+        run: |
+          jfrog config add demo \
+            --artifactory-url=${{ secrets.JFROG_URL }}/artifactory \
+            --xray-url=${{ secrets.JFROG_URL }}/xray \
+            --user=${{ secrets.JFROG_USERNAME }} \
+            --access-token=${{ secrets.JFROG_PASSWORD }} \
+            --interactive=false
+
+      - name: Run JFrog Security Audit for npm
+        run: jfrog audit npm
+
+      - name: Run JFrog Scan
+        run: jfrog scan .
+
+      - name: Cleanup JFrog Configuration
+        if: always()
+        run: jfrog config remove demo || true
+
+      - name: Run Linter
+        run: npm run lint
+         
+      - name: Run Unit Tests
+        run: npm test -- --coverage || true
+        
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Build and Push Docker Image
+        run: |
+          TAG="${GITHUB_SHA::4}"
+          IMAGE_NAME="ronak1907/simple-react-app:$TAG"
+          docker build -t $IMAGE_NAME .
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          docker push $IMAGE_NAME

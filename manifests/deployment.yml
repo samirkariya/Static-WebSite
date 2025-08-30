@@ -1,0 +1,44 @@
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ronak
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: facebook
+  namespace: ronak
+spec:
+  replicas: 15
+  selector:
+    matchLabels:
+      app: facebook
+  template:
+    metadata:
+      labels:
+        app: facebook
+    spec:
+      containers:
+      - name: facebook
+        image: gcr.io/google-samples/hello-app:1.0
+        ports:
+        - containerPort: 8080
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: facebook-svc
+  namespace: ronak
+spec:
+  selector:
+    app: facebook
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: NodePort
